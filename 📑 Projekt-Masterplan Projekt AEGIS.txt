@@ -1,0 +1,80 @@
+📑 Projekt-Masterplan: Projekt AEGIS (Autonomer Cyberverteidigungskern)
+Dieses Dokument beschreibt die Architektur, den aktuellen Entwicklungsstand und die nächsten Implementierungsschritte für das serverlose, KI-gestützte Infrastruktur-Monitoring- und Selbstheilungssystem.
+
+🛠 Tech-Stack & Infrastruktur
+Backend: Node.js mit TypeScript, Express-Server
+
+Datenbank: PostgreSQL (Hosted auf Neon.tech via @neondatabase/serverlessoder pg-Pool)
+
+KI-Schnittstelle: Google Gen AI SDK (Gemini API)
+
+Sicherheit: JSON Web Tokens (JWT) & bcryptjsfür Passwort-Hashing
+
+📊 Aktueller Projekt-Status (Sprint-Review)
+[x] Meilenstein 1: Projekt-Setup & Struktur
+
+Ordnerstruktur nach Enterprise-Muster ( /config, /models, /simulator, /ai-engine, /autopilot) angelegt.
+
+package.json, tsconfig.jsonund .env-Vorlage erfolgreich generiert und Abhängigkeiten installiert.
+
+[x] Meilenstein 2: Datenbank-Kopplung & Schema
+
+Pool-Verbindung insrc/config/neon.ts steht inklusive automatischem Verbindungstest beim Serverstart.
+
+Automatisches Datenbank-Setup ( src/config/initDb.ts) schreibt das SQL-Schema ( users, simulated_nodes, system_logs, incident_responses) bei Bedarf direkt in die Cloud-Datenbank.
+
+[x] Meilenstein 3: Der Log-Simulator ( src/simulator/engine.ts)
+
+Erstellt beim Start automatisch 5 virtuelle Server-Knoten in der DB.
+
+Aktualisiert alle 10 Sekunden autonom die Performance-Metriken (CPU/RAM).
+
+Generiert mit einer 15%-Chance kritischer Sicherheits-Vorfälle (CRITICAL Logs) wie SSH-Brute-Force oder OOM-Crashes und protokolliert diese im Status PENDING.
+
+🚀 Offene Meilensteine ​​(Arbeitsaufträge für Claude Code)
+Bitte arbeiten Sie die folgenden Phasen Schritt für Schritt ab. Beginnen Sie erst mit der nächsten Phase, wenn die vorherige vollständig getestet wurde.
+
+🧠 Phase 4: Das KI-Gehirn ( src/config/gemini.ts& src/ai-engine/)
+Das Ziel ist es, die in der Datenbank landenden PENDINGVorfälle mittels KI zu analysieren. Wichtig: Die Antwort darf kein Freitext sein, sondern muss ein striktes JSON-Objekt sein.
+
+API-Setup: Initialisieren Sie das Google Gen AI SDK unter Verwendung der Umgebungsvariablen GEMINI_API_KEY.
+
+Der Watcher-Loop: Baue eine Funktion, die regelmäßig (oder Event-gesteuert) nach Logs in system_logssucht, deren Schweregrad CRITICAList und für die in incident_responsesder Status noch auf PENDINGsteht.
+
+Striktes JSON-Prompting: Konstruiere einen System-Prompt für Gemini. Übergib das kritische Log und zwinge das Modell, exakt diese Struktur zurückzugeben:
+
+JSON
+{
+  "threat_detected": true,
+  "attack_type": "Z.B. BRUTE_FORCE, HIGH_LOAD, DATABASE_ERROR",
+  "confidence_score": 95,
+  "root_cause": "Kurze Erklärung des Fehlers",
+  "recommended_action": "Z.B. BLOCK_IP, RESTART_SERVICE, SCALE_RESOURCES, IGNORE",
+  "action_parameter": "Z.B. die IP-Adresse oder der Service-Name"
+}
+⚡ Phase 5: Der Autopilot-Reaktor ( src/autopilot/)
+Hier wird die autonome Heilung umgesetzt. Das System basiert auf dem von Gemini generierten JSON und führt die passende virtuelle Aktion aus.
+
+Aktions-Handler (Command Pattern): Schreibe Funktionen für die verschiedenen recommended_action-Typen:
+
+BLOCK_IP: Ändert den Status des betroffenen Knotens in simulated_nodeszurück auf HEALTHY. Schreibt einen simulierten Firewall-Eintrag in die Logs.
+
+RESTART_SERVICE: Simuliert einen Dienst-Neustart, setzt CPU/RAM zurück und setzt den Knoten auf HEALTHY.
+
+Protokollierung: Aktualisierte nach der Aktion den Eintrag in incident_responses. Stellen Sie den Status auf RESOLVED(oder FAILED) und speichern Sie die KI-Analyse sowie die durchgeführte Aktion ab.
+
+🔒 Phase 6: API-Absicherung & Login ( src/controllers/& src/middleware/)
+Das System benötigt administrative Absicherung für das spätere Dashboard.
+
+Benutzerverwaltung: Baue eine Registrierungs- und Login-Route. Nutze bcryptjs, um die Passwörter sicher zu hashen.
+
+JWT-Generierung: Erstelle beim erfolgreichen Login einen JSON Web Token (gültig für zB 2 Stunden), der die User-ID und die Rolle ( admin) enthält.
+
+Auth-Middleware: Schütze alle zukünftigen API-Routen (Dashboard-Daten, Simulator-Steuerung) mit einer Middleware, die den JWT-Token im HTTP-Header validiert.
+
+Wie du das jetzt mit Claude Code nutzt:
+Wenn du Claude Code startest, kannst du ihm einfach sagen:
+
+„Lies das Meilensteindokument. Wir haben die Meilensteine ​​1 bis 3 abgeschlossen. Lass uns jetzt ganz in Ruhe mit Phase 4 (Das KI-Gehirn) starten und das API-Setup sowie den JSON-Prompt aufsetzen.“
+
+Damit haben Sie beide eine perfekte, professionelle Struktur für die nächste Arbeitsphase!
