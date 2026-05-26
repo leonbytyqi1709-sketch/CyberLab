@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AEGIS — Autonomous Cyber Defense Core</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo-mark">
+        <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
+          <path d="M16 2 L28 7 V16 C28 23 22 28 16 30 C10 28 4 23 4 16 V7 Z"
+                fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linejoin="round" />
+          <path d="M11 15 L14 18 L21 11" fill="none" stroke="currentColor"
+                stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </div>
+      <div class="brand-text">
+        <div class="brand-title">AEGIS</div>
+        <div class="brand-sub">Autonomous Cyber Defense Core</div>
+      </div>
+    </div>
+
+    <div class="topbar-meta">
+      <div class="live-indicator" id="liveIndicator">
+        <span class="live-dot"></span>
+        <span class="live-label">LIVE</span>
+      </div>
+      <div class="server-time" id="serverTime">--:--:--</div>
+      <div class="user-chip" id="userChip">
+        <span class="user-email" id="userEmail">—</span>
+        <button class="logout-btn" id="logoutBtn" title="Logout">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- AI Heartbeat Bar (live Gemini activity) -->
+  <div class="ai-heartbeat" id="aiHeartbeat" data-state="idle">
+    <div class="hb-pulse">
+      <span class="hb-dot"></span>
+      <span class="hb-dot"></span>
+      <span class="hb-dot"></span>
+    </div>
+    <div class="hb-icon" aria-hidden="true">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 2 a3 3 0 0 1 3 3 v6 a3 3 0 0 1-6 0 V5 a3 3 0 0 1 3-3 z"/>
+        <path d="M19 11 a7 7 0 0 1-14 0 M12 18 v3 M8 21 h8"/>
+      </svg>
+    </div>
+    <div class="hb-text">
+      <span class="hb-label">AI ENGINE</span>
+      <span class="hb-status" id="hbStatus">idle</span>
+    </div>
+    <div class="hb-elapsed" id="hbElapsed"></div>
+    <div class="hb-last" id="hbLast"></div>
+  </div>
+
+  <main class="main">
+    <!-- Master Autopilot Switch (FinOps / Cost Control) -->
+    <section class="autopilot-master" id="autopilotMaster">
+      <div class="autopilot-main-row">
+        <div class="autopilot-left">
+          <div class="autopilot-icon" id="autopilotIcon">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+              <path d="M12 2 v6 M4.9 5 a10 10 0 1 0 14.2 0" fill="none"
+                    stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="autopilot-meta">
+            <div class="autopilot-eyebrow">FinOps · Cost Control</div>
+            <div class="autopilot-title">System Autopilot</div>
+            <div class="autopilot-sub" id="autopilotSub">Loading state…</div>
+          </div>
+        </div>
+
+        <div class="autopilot-right">
+          <div class="autopilot-state-readout">
+            <div class="autopilot-state-label">STATUS</div>
+            <div class="autopilot-state-value" id="autopilotStateValue">…</div>
+            <div class="autopilot-cost" id="autopilotCost">—</div>
+          </div>
+          <button type="button" class="autopilot-toggle" id="autopilotToggle" disabled>
+            <span class="toggle-track">
+              <span class="toggle-glow"></span>
+              <span class="toggle-thumb"></span>
+            </span>
+            <span class="toggle-cta" id="autopilotCta">…</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="autopilot-cost-strip" id="autopilotCostStrip">
+        <div class="cost-cell" id="cellRpm">
+          <span class="cost-label">RPM Now <span class="cost-tier">FREE</span></span>
+          <span class="cost-value" id="quotaRpmValue">— / —</span>
+          <div class="quota-bar"><div class="quota-bar-fill" id="quotaRpmBar"></div></div>
+          <span class="cost-meta" id="quotaRpmMeta">last 60s</span>
+        </div>
+        <div class="cost-cell" id="cellRpd">
+          <span class="cost-label">Daily Quota <span class="cost-tier">FREE</span></span>
+          <span class="cost-value" id="quotaRpdValue">— / —</span>
+          <div class="quota-bar"><div class="quota-bar-fill" id="quotaRpdBar"></div></div>
+          <span class="cost-meta" id="quotaRpdMeta">resets midnight UTC</span>
+        </div>
+        <div class="cost-cell">
+          <span class="cost-label">Last 24h</span>
+          <span class="cost-value" id="cost24hCalls">— calls</span>
+          <span class="cost-meta" id="cost24hMeta">— tok</span>
+        </div>
+        <div class="cost-cell">
+          <span class="cost-label">Lifetime</span>
+          <span class="cost-value" id="costLifeCalls">— calls</span>
+          <span class="cost-meta" id="costLifeMeta">— tok</span>
+        </div>
+        <div class="cost-cell cost-sources">
+          <span class="cost-label">By Source · Today</span>
+          <span class="cost-value cost-source-list" id="costSourceList">—</span>
+          <span class="cost-meta" id="costModel">model: —</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- KI-Lagebericht / Situation Briefing -->
+    <section class="situation-panel" id="situationPanel">
+      <div class="situation-level" id="situationLevel">
+        <div class="situation-level-label">Threat Level</div>
+        <div class="situation-level-value" id="situationLevelValue">—</div>
+      </div>
+      <div class="situation-body">
+        <div class="situation-eyebrow">AEGIS Executive Briefing</div>
+        <div class="situation-headline" id="situationHeadline">Initializing intelligence engine…</div>
+        <div class="situation-summary" id="situationSummary">Awaiting first AI-generated assessment of the operational picture.</div>
+        <ul class="situation-recs" id="situationRecs"></ul>
+        <div class="situation-foot" id="situationFoot">briefing pending</div>
+      </div>
+    </section>
+
+    <!-- AI Engine Activity Console (live Gemini call traces) -->
+    <section class="panel ai-console" id="aiConsole">
+      <div class="panel-head ai-console-head">
+        <h2 class="panel-title">
+          AI Engine Activity
+          <span class="badge-admin badge-trace">LIVE TRACE</span>
+        </h2>
+        <span class="panel-sub" id="aiConsoleSub">click any row to inspect the actual prompt + response</span>
+      </div>
+      <div class="ai-console-feed" id="aiConsoleFeed">
+        <div class="empty-state">Loading recent AI activity…</div>
+      </div>
+    </section>
+
+    <section class="stats-row">
+      <div class="stat-card stat-healthy">
+        <div class="stat-label">Healthy Nodes</div>
+        <div class="stat-value" id="statHealthy">—</div>
+        <div class="stat-foot" id="statHealthyFoot">of — total</div>
+      </div>
+      <div class="stat-card stat-warning">
+        <div class="stat-label">Warning</div>
+        <div class="stat-value" id="statWarning">—</div>
+        <div class="stat-foot">degraded performance</div>
+      </div>
+      <div class="stat-card stat-critical">
+        <div class="stat-label">Critical / Under Attack</div>
+        <div class="stat-value" id="statCritical">—</div>
+        <div class="stat-foot">requires intervention</div>
+      </div>
+      <div class="stat-card stat-pending">
+        <div class="stat-label">Pending Incidents</div>
+        <div class="stat-value" id="statPending">—</div>
+        <div class="stat-foot" id="statPendingFoot">— in progress</div>
+      </div>
+      <div class="stat-card stat-resolved">
+        <div class="stat-label">Autopilot Resolved</div>
+        <div class="stat-value" id="statResolved">—</div>
+        <div class="stat-foot" id="statResolvedFoot">— in last 5 min</div>
+      </div>
+      <div class="stat-card stat-load">
+        <div class="stat-label">Avg Cluster Load</div>
+        <div class="stat-value">
+          <span id="statAvgCpu">—</span><span class="stat-unit">% CPU</span>
+        </div>
+        <div class="stat-foot">
+          <span id="statAvgRam">—</span>% RAM avg
+        </div>
+      </div>
+    </section>
+
+    <!-- SIEM Alerts -->
+    <section class="panel siem-panel">
+      <div class="panel-head">
+        <h2 class="panel-title">SIEM Campaign Alerts <span class="badge-admin badge-siem">CORRELATOR</span></h2>
+        <span class="panel-sub">multi-node attack patterns detected by AEGIS SIEM</span>
+      </div>
+      <div class="siem-feed" id="siemFeed">
+        <div class="empty-state">No coordinated campaigns detected.</div>
+      </div>
+    </section>
+
+    <!-- Network Topology Graph -->
+    <section class="panel topology-panel">
+      <div class="panel-head">
+        <h2 class="panel-title">Network Topology <span class="badge-admin badge-graph">LIVE</span></h2>
+        <div class="topology-legend">
+          <span class="legend-item"><span class="legend-dot legend-healthy"></span>Healthy</span>
+          <span class="legend-item"><span class="legend-dot legend-warning"></span>Warning</span>
+          <span class="legend-item"><span class="legend-dot legend-critical"></span>Critical</span>
+          <span class="legend-item"><span class="legend-dot legend-isolated"></span>Isolated</span>
+          <span class="legend-item"><span class="legend-dot legend-vault"></span>Deep Vault</span>
+          <span class="legend-item"><span class="legend-dot legend-temp"></span>Scaled</span>
+          <span class="legend-item legend-link"><span class="legend-line blocked"></span>Blocked link</span>
+        </div>
+      </div>
+      <div class="topology-stage">
+        <div id="topologyGraph" class="topology-graph"></div>
+        <div class="hud-overlay" aria-hidden="true">
+          <span class="hud-corner tl"></span>
+          <span class="hud-corner tr"></span>
+          <span class="hud-corner bl"></span>
+          <span class="hud-corner br"></span>
+          <span class="hud-scanlines"></span>
+          <span class="hud-sweep"></span>
+          <span class="hud-coords coords-tl">SEC.OPS // GRID-A7</span>
+          <span class="hud-coords coords-br">LIVE · AEGIS://TOPO</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Chaos Console -->
+    <section class="panel chaos-panel">
+      <div class="panel-head">
+        <h2 class="panel-title">Chaos Console <span class="badge-admin">ADMIN</span></h2>
+        <span class="panel-sub">manually inject extreme threat scenarios</span>
+      </div>
+      <div class="chaos-body">
+        <div class="chaos-warning">
+          ⚠ Triggers a CRITICAL incident immediately. The AEGIS pipeline will analyze and react within ~30s.
+        </div>
+        <div class="chaos-buttons">
+          <button class="chaos-btn chaos-ransom" data-scenario="ransomware">
+            <span class="chaos-btn-icon">🔒</span>
+            <span class="chaos-btn-label">Ransomware Attack</span>
+            <span class="chaos-btn-sub">Mass file encryption</span>
+          </button>
+          <button class="chaos-btn chaos-integrity" data-scenario="integrity-loss">
+            <span class="chaos-btn-icon">⚠</span>
+            <span class="chaos-btn-label">DB Integrity Loss</span>
+            <span class="chaos-btn-sub">Checksum mismatch, corruption</span>
+          </button>
+        </div>
+        <div class="chaos-result" id="chaosResult" hidden></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">Infrastructure Nodes</h2>
+        <span class="panel-sub" id="nodesSub">monitoring —</span>
+      </div>
+      <div class="nodes-grid" id="nodesGrid">
+        <div class="empty-state">Loading nodes…</div>
+      </div>
+    </section>
+
+    <section class="split">
+      <div class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">Live System Log</h2>
+          <span class="panel-sub">last 60 events</span>
+        </div>
+        <div class="log-feed" id="logFeed">
+          <div class="empty-state">Loading logs…</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">Autopilot Activity</h2>
+          <span class="panel-sub">incident response timeline</span>
+        </div>
+        <div class="incidents-feed" id="incidentsFeed">
+          <div class="empty-state">Loading incidents…</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">Audit Trail <span class="badge-admin">Revisionssicher</span></h2>
+        <span class="panel-sub">tamper-evident action ledger</span>
+      </div>
+      <div class="audit-feed" id="auditFeed">
+        <div class="empty-state">Loading audit log…</div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>Project AEGIS · Powered by Gemini 2.5 Flash · Neon PostgreSQL · JWT-secured</span>
+    <span id="lastUpdate">awaiting first sync…</span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

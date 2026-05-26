@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AEGIS — Authentication Required</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="login-body">
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+
+  <main class="login-shell">
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="logo-mark logo-large">
+          <svg viewBox="0 0 32 32" width="42" height="42" aria-hidden="true">
+            <path d="M16 2 L28 7 V16 C28 23 22 28 16 30 C10 28 4 23 4 16 V7 Z"
+                  fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linejoin="round" />
+            <path d="M11 15 L14 18 L21 11" fill="none" stroke="currentColor"
+                  stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+        <div class="login-title">AEGIS</div>
+        <div class="login-sub">Autonomous Cyber Defense Core</div>
+      </div>
+
+      <form id="loginForm" class="login-form" autocomplete="off">
+        <label class="form-label">
+          <span class="form-label-text">Operator E-Mail</span>
+          <input id="emailInput" type="email" required placeholder="admin@aegis.local" />
+        </label>
+
+        <label class="form-label">
+          <span class="form-label-text">Passwort</span>
+          <input id="passwordInput" type="password" required placeholder="••••••••••" />
+        </label>
+
+        <button type="submit" id="submitBtn" class="login-button">
+          <span class="btn-text">Authenticate</span>
+          <span class="btn-spinner" hidden></span>
+        </button>
+
+        <div id="loginError" class="login-error" hidden></div>
+      </form>
+
+      <div class="login-foot">
+        <span class="status-dot"></span>
+        <span>Encrypted channel · JWT HS256 · 2h session</span>
+      </div>
+    </div>
+  </main>
+
+  <script src="/login.js"></script>
+</body>
+</html>
