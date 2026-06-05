@@ -30,10 +30,13 @@ const COLOR: Record<Cls, string> = {
 const slug = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const hex = () => Math.floor(Math.random() * 256).toString(16).padStart(2, "0");
+const seq = () => Math.floor(Math.random() * 4_000_000_000);
 
 const HELP: [string, string][] = [
   ["help", "Diese Übersicht anzeigen"],
   ["nmap -sV <ip>", "Gerät scannen & Ports/OS aufdecken"],
+  ["tcpdump", "Live-Paketmitschnitt (ARP/DNS/TCP) — Wireshark-Light"],
   ["nslookup <host> / ping <host>", "Namensauflösung über pfSense-DNS"],
   ["apt install <dienst>", "Dienst installieren (Ubuntu: nginx·postgresql·docker-ce)"],
   ["brew install <dienst>", "Dienst installieren (Mac Studio)"],
@@ -126,6 +129,11 @@ export default function Terminal({
     if (cmd.startsWith("nmap")) {
       if (!need()) return;
       await runNmap(dev!, cmd);
+      return;
+    }
+    // tcpdump (Wireshark-Light)
+    if (cmd.startsWith("tcpdump")) {
+      await runTcpdump();
       return;
     }
     // nslookup
@@ -291,6 +299,31 @@ export default function Terminal({
     } catch {
       push("copilot: Backend nicht verfügbar", "err");
     }
+  }
+
+  /* ── Wireshark-Light: simulierter Live-Mitschnitt ─────────────────── */
+  async function runTcpdump() {
+    setBusy(true);
+    push("tcpdump: verbose output suppressed, listening on eth0, link-type EN10MB", "muted");
+    const ip = () => `192.168.${1 + Math.floor(Math.random() * 3)}.${2 + Math.floor(Math.random() * 250)}`;
+    const port = () => 1024 + Math.floor(Math.random() * 60000);
+    const kinds = [
+      () => `ARP, Request who-has ${ip()} tell ${ip()}, length 28`,
+      () => `ARP, Reply ${ip()} is-at 00:1c:${hex()}:${hex()}:${hex()}:${hex()}, length 46`,
+      () => `IP ${ip()}.${port()} > 8.8.8.8.53: ${4096 + Math.floor(Math.random() * 50000)}+ A? cyberlab.local. (32)`,
+      () => `IP ${ip()}.${port()} > ${ip()}.443: Flags [S], seq ${seq()}, win 64240, length 0`,
+      () => `IP ${ip()}.${port()} > ${ip()}.80: Flags [S], seq ${seq()}, win 64240, length 0`,
+      () => `IP ${ip()}.443 > ${ip()}.${port()}: Flags [S.], seq ${seq()}, ack ${seq()}, win 65160`,
+    ];
+    for (let i = 0; i < 16; i++) {
+      await sleep(190 + Math.random() * 160);
+      const ts = `${10 + (i % 50)}:${String(20 + i).padStart(2, "0")}:${String(i * 3 % 60).padStart(2, "0")}.${String(Math.floor(Math.random() * 1000000)).padStart(6, "0")}`;
+      const line = kinds[Math.floor(Math.random() * kinds.length)]();
+      const cls: Cls = line.startsWith("ARP") ? "warn" : /\.53:/.test(line) ? "info" : "ok";
+      push(`${ts} ${line}`, cls);
+    }
+    push("16 packets captured", "muted");
+    setBusy(false);
   }
 
   /* ── Feature A: DNS ───────────────────────────────────────────────── */

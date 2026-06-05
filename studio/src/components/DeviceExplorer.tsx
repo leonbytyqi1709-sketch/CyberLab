@@ -19,11 +19,9 @@ export default function DeviceExplorer({
   onClearAll,
 }: DeviceExplorerProps) {
   // Geräte nach Katalog-Kategorie gruppieren.
-  const byCategory: Record<Category, Device[]> = {
-    Compute: [],
-    Storage: [],
-    Network: [],
-  };
+  const byCategory = Object.fromEntries(
+    CATEGORIES.map((c) => [c, [] as Device[]]),
+  ) as Record<Category, Device[]>;
   for (const dev of devices) {
     const cat = CATALOG_BY_TYPE[dev.type]?.category ?? "Compute";
     byCategory[cat].push(dev);

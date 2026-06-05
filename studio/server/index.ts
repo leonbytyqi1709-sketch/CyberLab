@@ -36,7 +36,13 @@ async function start() {
   try {
     await initDbWithRetry();
     await rearmPendingBoots();
-    startSimulator();
+    // Docker-Split: im Modus STUDIO_ROLE=api läuft der Simulator separat
+    // (Service `simulation-engine` via server/sim.ts). Default = Monolith.
+    if ((process.env.STUDIO_ROLE ?? "all") !== "api") {
+      startSimulator();
+    } else {
+      console.log("[api]: STUDIO_ROLE=api — Simulator läuft separat (simulation-engine).");
+    }
     app.listen(PORT, () => {
       console.log(`[api]: CyberLab Studio API läuft auf http://localhost:${PORT}`);
     });

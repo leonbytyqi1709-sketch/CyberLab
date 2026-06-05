@@ -1,0 +1,58 @@
+# CyberLab Studio — Docker-Compose-Architektur (Scaffolding für den Split).
+# Trennt die zustandslose Simulation-Engine vom API-Gateway. Gemeinsamer
+# State liegt ausschließlich in PostgreSQL — die Services halten keinen.
+#
+# Start (sobald Docker verfügbar):  docker compose up --build
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: cyberlab
+      POSTGRES_PASSWORD: cyberlab
+      POSTGRES_DB: cyberlab
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cyberlab"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    command: ["npx", "tsx", "server/index.ts"]
+    environment:
+      STUDIO_ROLE: api # serviert nur die API, kein Simulator
+      STUDIO_API_PORT: "3001"
+      DATABASE_URL: postgres://cyberlab:cyberlab@db:5432/cyberlab
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  simulation-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    command: ["npx", "tsx", "server/sim.ts"]
+    environment:
+      STUDIO_ROLE: sim # nur der Simulator, zustandslos gegen die DB
+      DATABASE_URL: postgres://cyberlab:cyberlab@db:5432/cyberlab
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "5174:80"
+    depends_on:
+      - api-gateway
+
+volumes:
+  pgdata:

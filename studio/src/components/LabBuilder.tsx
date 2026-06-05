@@ -5,10 +5,12 @@ import { CATALOG, CATEGORIES, type CatalogItem } from "../data/catalog";
 interface LabBuilderProps {
   /** Wird nach erfolgreichem Anlegen aufgerufen → App lädt Geräteliste neu. */
   onCreated: () => void;
+  /** Ziel-Infrastruktur (Tab), in der das Gerät angelegt wird. */
+  homelabId: string;
 }
 
 /** Die "leere Werkbank": Hardware-Katalog zum Provisionieren neuer Geräte. */
-export default function LabBuilder({ onCreated }: LabBuilderProps) {
+export default function LabBuilder({ onCreated, homelabId }: LabBuilderProps) {
   const [selected, setSelected] = useState<CatalogItem | null>(null);
 
   return (
@@ -76,6 +78,7 @@ export default function LabBuilder({ onCreated }: LabBuilderProps) {
       {selected && (
         <ProvisionDialog
           item={selected}
+          homelabId={homelabId}
           onClose={() => setSelected(null)}
           onCreated={() => {
             setSelected(null);
@@ -90,10 +93,12 @@ export default function LabBuilder({ onCreated }: LabBuilderProps) {
 /* ── Namens-Dialog → legt das Gerät an ──────────────────────────────── */
 function ProvisionDialog({
   item,
+  homelabId,
   onClose,
   onCreated,
 }: {
   item: CatalogItem;
+  homelabId: string;
   onClose: () => void;
   onCreated: () => void;
 }) {
@@ -124,6 +129,7 @@ function ProvisionDialog({
       await api.createDevice({
         name: trimmed,
         type: item.type as DeviceType,
+        homelab_id: homelabId,
         ...(ip.trim() ? { ip: ip.trim() } : {}),
       });
       onCreated();

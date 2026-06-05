@@ -13,10 +13,13 @@ export function useCommandPaletteHotkeys(opts: {
   isOpen: boolean;
   open: () => void;
   close: () => void;
+  /** Nur im aktiven Tab reagieren (sonst feuern alle gemounteten Workspaces). */
+  enabled?: boolean;
 }) {
-  const { isOpen, open, close } = opts;
+  const { isOpen, open, close, enabled = true } = opts;
 
   useEffect(() => {
+    if (!enabled) return;
     const onKeyDown = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
 
@@ -39,5 +42,5 @@ export function useCommandPaletteHotkeys(opts: {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isOpen, open, close]);
+  }, [isOpen, open, close, enabled]);
 }

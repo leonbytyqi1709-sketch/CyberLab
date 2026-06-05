@@ -10,7 +10,14 @@ export type DeviceType =
   | "TRUENAS"
   | "SYNOLOGY"
   | "PFSENSE"
-  | "MANAGED_SWITCH";
+  | "MANAGED_SWITCH"
+  // Schritt 8 — Hardware-Erweiterung
+  | "CORE_ROUTER"
+  | "ACCESS_POINT"
+  | "SMART_UPS"
+  | "WINDOWS_CLIENT"
+  | "ADMIN_NOTEBOOK"
+  | "DEV_WORKSTATION";
 
 export type DiskState = "ONLINE" | "FAULTY" | "RESILVERING";
 
@@ -94,6 +101,37 @@ export const PROFILES: Record<DeviceType, DeviceProfile> = {
     packages: ["lldp", "snmp", "rstp", "vlan-mgr"],
     disks: [],
   },
+  CORE_ROUTER: {
+    os: "RouterOS 7.14",
+    packages: ["bgp", "ospf", "firewall", "dhcp-server"],
+    disks: [{ slot: 1, size_gb: 1, kind: "Flash" }],
+  },
+  ACCESS_POINT: {
+    os: "UniFi AP OS 6.6",
+    packages: ["hostapd", "wpa-supplicant", "lldp"],
+    disks: [{ slot: 1, size_gb: 1, kind: "Flash" }],
+  },
+  SMART_UPS: {
+    os: "APC Smart-UPS Firmware",
+    packages: ["apcupsd", "snmp"],
+    disks: [],
+  },
+  WINDOWS_CLIENT: {
+    os: "Windows 11 Pro 24H2",
+    packages: ["Defender", "Office 365", "RDP-Client"],
+    disks: [{ slot: 1, size_gb: 512, kind: "NVMe" }],
+  },
+  ADMIN_NOTEBOOK: {
+    os: "Windows 11 Pro 24H2",
+    chip: "Intel Core Ultra 7",
+    packages: ["mRemoteNG", "PuTTY", "WinSCP", "Wireshark"],
+    disks: [{ slot: 1, size_gb: 1024, kind: "NVMe" }],
+  },
+  DEV_WORKSTATION: {
+    os: "Debian 12 (Bookworm)",
+    packages: ["git", "docker-ce", "code", "build-essential"],
+    disks: [{ slot: 1, size_gb: 2048, kind: "NVMe" }],
+  },
 };
 
 export const isDeviceType = (t: string): t is DeviceType => t in PROFILES;
@@ -160,6 +198,12 @@ const PROC_NAMES: Record<DeviceType, string[]> = {
   SYNOLOGY: ["systemd", "smbd", "synoindex", "pkgctl", "sshd"],
   PFSENSE: ["pf", "unbound", "openvpn", "syslogd", "sshd"],
   MANAGED_SWITCH: ["switchd", "lldpd", "snmpd", "stpd"],
+  CORE_ROUTER: ["routerd", "bgpd", "ospfd", "dhcpd", "firewalld"],
+  ACCESS_POINT: ["hostapd", "wpa_supplicant", "lldpd", "stad"],
+  SMART_UPS: ["apcupsd", "snmpd"],
+  WINDOWS_CLIENT: ["System", "explorer.exe", "svchost.exe", "MsMpEng.exe", "OUTLOOK.exe"],
+  ADMIN_NOTEBOOK: ["System", "explorer.exe", "mRemoteNG.exe", "Wireshark.exe", "svchost.exe"],
+  DEV_WORKSTATION: ["systemd", "dockerd", "code", "node", "sshd"],
 };
 
 /** Container/Services je Gerätetyp (für `docker restart` & Service-Incidents). */
@@ -199,6 +243,17 @@ export function scanPorts(type: DeviceType): { port: number; service: string }[]
       return [SSH, { port: 88, service: "kerberos" }, { port: 5900, service: "vnc Screen Sharing" }];
     case "PROXMOX_NODE":
       return [SSH, { port: 8006, service: "http Proxmox-VE" }, { port: 3128, service: "spice-proxy" }];
+    case "CORE_ROUTER":
+      return [SSH, { port: 179, service: "bgp" }, { port: 443, service: "https" }, { port: 67, service: "dhcp" }];
+    case "ACCESS_POINT":
+      return [{ port: 22, service: "ssh" }, { port: 443, service: "https" }, { port: 8443, service: "unifi" }];
+    case "SMART_UPS":
+      return [{ port: 161, service: "snmp" }, { port: 3551, service: "apcupsd" }];
+    case "WINDOWS_CLIENT":
+    case "ADMIN_NOTEBOOK":
+      return [{ port: 135, service: "msrpc" }, { port: 139, service: "netbios-ssn" }, { port: 445, service: "microsoft-ds" }, { port: 3389, service: "ms-wbt-server RDP" }];
+    case "DEV_WORKSTATION":
+      return [SSH, { port: 3000, service: "http dev-server" }, { port: 5173, service: "http vite" }];
     default:
       return [SSH, { port: 80, service: "http nginx" }, { port: 443, service: "https" }];
   }
@@ -207,7 +262,10 @@ export function scanPorts(type: DeviceType): { port: number; service: string }[]
 export const isStorage = (t: DeviceType) =>
   t === "TRUENAS" || t === "SYNOLOGY";
 export const isNetwork = (t: DeviceType) =>
-  t === "PFSENSE" || t === "MANAGED_SWITCH";
+  t === "PFSENSE" || t === "MANAGED_SWITCH" || t === "CORE_ROUTER" || t === "ACCESS_POINT";
+/** Endgeräte/Clients — hängen logisch hinter Switch/Router (für Reachability). */
+export const isClient = (t: DeviceType) =>
+  t === "WINDOWS_CLIENT" || t === "ADMIN_NOTEBOOK" || t === "DEV_WORKSTATION";
 
 export interface Metrics {
   cpu_usage: number;
@@ -222,6 +280,8 @@ export interface Metrics {
   gpu_usage?: number; // Mac Studio
   unified_mem_total_gb?: number; // Mac Studio
   unified_mem_used_gb?: number; // Mac Studio
+  battery_charge?: number; // Smart-USV (%)
+  load_pct?: number; // Smart-USV Last (%)
 }
 
 /** Live-Ressourcen-Metriken, die beim ONLINE-Übergang initialisiert werden. */
@@ -243,6 +303,13 @@ export function initMetrics(type: DeviceType): Metrics {
     m.unified_mem_total_gb = 192; // M2 Ultra
     m.unified_mem_used_gb = rnd(24, 90);
     m.gpu_usage = rnd(5, 30);
+  }
+
+  if (type === "SMART_UPS") {
+    m.battery_charge = rnd(92, 100);
+    m.load_pct = rnd(18, 55);
+    m.cpu_usage = 0;
+    m.ram_usage = 0;
   }
 
   return m;

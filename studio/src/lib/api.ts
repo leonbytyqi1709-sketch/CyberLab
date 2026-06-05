@@ -10,7 +10,13 @@ export type DeviceType =
   | "TRUENAS"
   | "SYNOLOGY"
   | "PFSENSE"
-  | "MANAGED_SWITCH";
+  | "MANAGED_SWITCH"
+  | "CORE_ROUTER"
+  | "ACCESS_POINT"
+  | "SMART_UPS"
+  | "WINDOWS_CLIENT"
+  | "ADMIN_NOTEBOOK"
+  | "DEV_WORKSTATION";
 
 export type DeviceStatus = "BOOTING" | "ONLINE" | "OFFLINE" | "CRITICAL";
 
@@ -27,6 +33,8 @@ export interface DeviceMetrics {
   gpu_usage?: number;
   unified_mem_total_gb?: number;
   unified_mem_used_gb?: number;
+  battery_charge?: number;
+  load_pct?: number;
 }
 
 export interface Process {
@@ -103,6 +111,7 @@ export interface DeviceLog {
   description: string | null;
   priority: "P1" | "P2" | "P3";
   status: "OPEN" | "INVESTIGATING" | "RESOLVED";
+  kind?: string;
   created_at: string;
 }
 
@@ -110,6 +119,23 @@ export interface DeviceLog {
 export interface LogRow extends DeviceLog {
   device_name: string;
   device_type: DeviceType;
+}
+
+/** Eintrag der Git-Style Konfigurations-Historie (Lab Commits). */
+export interface LabCommit {
+  hash: string;
+  device_id: string | null;
+  device_name: string | null;
+  message: string;
+  kind: string;
+  created_at: string;
+}
+
+export interface Homelab {
+  id: string;
+  name: string;
+  status: "ACTIVE" | "MAINTENANCE";
+  created_at: string;
 }
 
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
@@ -124,12 +150,24 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+const hl = (homelabId?: string) =>
+  homelabId ? `?homelab=${encodeURIComponent(homelabId)}` : "";
+
 export const api = {
-  listDevices: () => http<Device[]>("/devices"),
+  // HomeLabs (= Infrastruktur-Tabs)
+  listHomelabs: () => http<Homelab[]>("/homelabs"),
+  createHomelab: (name: string) =>
+    http<Homelab>("/homelabs", { method: "POST", body: JSON.stringify({ name }) }),
+  renameHomelab: (id: string, name: string) =>
+    http<Homelab>(`/homelabs/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+  deleteHomelab: (id: string) =>
+    http<{ ok: boolean }>(`/homelabs/${id}`, { method: "DELETE" }),
+
+  listDevices: (homelabId?: string) => http<Device[]>(`/devices${hl(homelabId)}`),
   getDevice: (id: string) => http<Device>(`/devices/${id}`),
-  listLogs: () => http<LogRow[]>("/logs"),
+  listLogs: (homelabId?: string) => http<LogRow[]>(`/logs${hl(homelabId)}`),
   getDeviceLogs: (id: string) => http<DeviceLog[]>(`/devices/${id}/logs`),
-  createDevice: (input: { name: string; type: DeviceType; ip?: string }) =>
+  createDevice: (input: { name: string; type: DeviceType; ip?: string; homelab_id?: string }) =>
     http<Device>("/devices", {
       method: "POST",
       body: JSON.stringify(input),
@@ -141,8 +179,8 @@ export const api = {
     }),
   deleteDevice: (id: string) =>
     http<{ ok: boolean }>(`/devices/${id}`, { method: "DELETE" }),
-  clearDevices: () =>
-    http<{ ok: boolean; deleted_count: number }>("/devices", {
+  clearDevices: (homelabId?: string) =>
+    http<{ ok: boolean; deleted_count: number }>(`/devices${hl(homelabId)}`, {
       method: "DELETE",
     }),
 
@@ -200,5 +238,13 @@ export const api = {
     http<{ ok: boolean; old: string; new: string }>(
       `/devices/${id}/zpool-replace`,
       { method: "POST", body: JSON.stringify({ old: oldId, new: newId }) },
+    ),
+
+  // Schritt 7 — Lab Commits
+  listCommits: (homelabId?: string) => http<LabCommit[]>(`/commits${hl(homelabId)}`),
+  revertCommit: (hash: string) =>
+    http<{ ok: boolean; device_id?: string; device_name?: string; message?: string; error?: string }>(
+      `/commits/${encodeURIComponent(hash)}/revert`,
+      { method: "POST" },
     ),
 };

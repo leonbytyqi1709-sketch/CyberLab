@@ -1,28 +1,52 @@
-import type { Device } from "../lib/api";
+import type { Device, LogRow, LabCommit } from "../lib/api";
+import type { GlobalView } from "./ActivityBar";
 import LabBuilder from "./LabBuilder";
 import DeviceDetail from "./DeviceDetail";
 import DeviceView from "./DeviceView";
+import TopologyView from "./TopologyView";
+import CommitsView from "./CommitsView";
+import NetworkAnalyzer from "./NetworkAnalyzer";
+import DirectoryView from "./DirectoryView";
 
 interface MainPanelProps {
   selectedDevice: Device | null;
+  view: GlobalView;
+  homelabId: string;
+  devices: Device[];
+  logs: LogRow[];
+  commits: LabCommit[];
   onCreated: () => void;
   onChanged: () => void;
   onDeleted: () => void;
   onRunCommand: (cmd: string) => void;
+  onFocusDevice: (id: string) => void;
 }
+
+const VIEW_LABEL: Record<GlobalView, string> = {
+  netdata: "Netzwerk-Analysator",
+  lab: "Lab Builder",
+  topology: "Network Topology",
+  directory: "Active Directory / LDAP",
+  commits: "Lab Commits",
+};
 
 /**
  * Hauptfenster:
- *  - keine Auswahl   → Lab Builder (Werkbank)
- *  - Gerät ONLINE    → DeviceView (Tabs: Task-Manager / Netdata, oder Unknown-Device)
- *  - sonst (BOOTING) → statische Detailansicht
+ *  - Gerät ausgewählt → DeviceView (ONLINE) bzw. Detailansicht.
+ *  - sonst globale Ansicht je ActivityBar: Lab Builder / Topology / Commits.
  */
 export default function MainPanel({
   selectedDevice,
+  view,
+  homelabId,
+  devices,
+  logs,
+  commits,
   onCreated,
   onChanged,
   onDeleted,
   onRunCommand,
+  onFocusDevice,
 }: MainPanelProps) {
   return (
     <main
@@ -30,29 +54,37 @@ export default function MainPanel({
         selectedDevice ? "glow-panel" : "border-[#00A3FF]/15"
       }`}
     >
-      {!selectedDevice ? (
-        <>
-          <Strip label="Lab Builder" />
-          <div className="h-[calc(100%-41px)]">
-            <LabBuilder onCreated={onCreated} />
-          </div>
-        </>
-      ) : selectedDevice.status === "ONLINE" ? (
-        <DeviceView
-          device={selectedDevice}
-          onChanged={onChanged}
-          onDeleted={onDeleted}
-          onRunCommand={onRunCommand}
-        />
+      {selectedDevice ? (
+        selectedDevice.status === "ONLINE" ? (
+          <DeviceView
+            device={selectedDevice}
+            onChanged={onChanged}
+            onDeleted={onDeleted}
+            onRunCommand={onRunCommand}
+          />
+        ) : (
+          <>
+            <Strip label={selectedDevice.name} />
+            <div className="h-[calc(100%-41px)]">
+              <DeviceDetail device={selectedDevice} onChanged={onChanged} onDeleted={onDeleted} />
+            </div>
+          </>
+        )
       ) : (
         <>
-          <Strip label={selectedDevice.name} />
+          <Strip label={VIEW_LABEL[view]} />
           <div className="h-[calc(100%-41px)]">
-            <DeviceDetail
-              device={selectedDevice}
-              onChanged={onChanged}
-              onDeleted={onDeleted}
-            />
+            {view === "netdata" ? (
+              <NetworkAnalyzer devices={devices} />
+            ) : view === "topology" ? (
+              <TopologyView devices={devices} logs={logs} onFocusDevice={onFocusDevice} />
+            ) : view === "directory" ? (
+              <DirectoryView />
+            ) : view === "commits" ? (
+              <CommitsView commits={commits} onChanged={onChanged} onFocusDevice={onFocusDevice} />
+            ) : (
+              <LabBuilder onCreated={onCreated} homelabId={homelabId} />
+            )}
           </div>
         </>
       )}

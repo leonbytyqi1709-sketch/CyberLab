@@ -10,11 +10,17 @@ import {
   ServerIcon,
   FirewallIcon,
   SwitchIcon,
+  RouterIcon,
+  WifiIcon,
+  BatteryIcon,
+  DesktopIcon,
+  LaptopIcon,
+  CodeIcon,
 } from "../components/icons";
 
 type IconCmp = ComponentType<SVGProps<SVGSVGElement>>;
 
-export type Category = "Compute" | "Storage" | "Network";
+export type Category = "Compute" | "Storage" | "Network" | "Power" | "Clients";
 
 export interface CatalogItem {
   type: DeviceType;
@@ -39,8 +45,18 @@ export const CATALOG: CatalogItem[] = [
   { type: "SYNOLOGY", label: "Synology Core", blurb: "DSM-NAS", category: "Storage", Icon: ServerIcon, accent: "text-cyber-cyan" },
 
   // ── Network ──
+  { type: "CORE_ROUTER", label: "Core-Router", blurb: "BGP / OSPF Gateway", category: "Network", Icon: RouterIcon, accent: "text-cyber-cyan" },
   { type: "PFSENSE", label: "pfSense Firewall", blurb: "Perimeter-Schutz", category: "Network", Icon: FirewallIcon, accent: "text-matrix-green" },
   { type: "MANAGED_SWITCH", label: "Managed Switch", blurb: "VLAN-Verteilung", category: "Network", Icon: SwitchIcon, accent: "text-matrix-green" },
+  { type: "ACCESS_POINT", label: "WLAN Access Point", blurb: "WiFi 6 · UniFi", category: "Network", Icon: WifiIcon, accent: "text-cyber-cyan" },
+
+  // ── Power ──
+  { type: "SMART_UPS", label: "Smart-USV", blurb: "Akku · Last-Monitoring", category: "Power", Icon: BatteryIcon, accent: "text-matrix-green" },
+
+  // ── Clients ──
+  { type: "WINDOWS_CLIENT", label: "Büro-PC", blurb: "Windows 11 Pro", category: "Clients", Icon: DesktopIcon, accent: "text-cyber-cyan" },
+  { type: "ADMIN_NOTEBOOK", label: "Admin-Notebook", blurb: "Windows 11 · Tools", category: "Clients", Icon: LaptopIcon, accent: "text-cyber-cyan" },
+  { type: "DEV_WORKSTATION", label: "Dev-Workstation", blurb: "Debian 12", category: "Clients", Icon: CodeIcon, accent: "text-matrix-green" },
 ];
 
 /** Schneller Lookup: Gerätetyp → Katalog-Metadaten (für Icon/Label im Explorer). */
@@ -52,4 +68,4 @@ export const CATALOG_BY_TYPE: Record<DeviceType, CatalogItem> = CATALOG.reduce(
   {} as Record<DeviceType, CatalogItem>,
 );
 
-export const CATEGORIES: Category[] = ["Compute", "Storage", "Network"];
+export const CATEGORIES: Category[] = ["Compute", "Storage", "Network", "Power", "Clients"];

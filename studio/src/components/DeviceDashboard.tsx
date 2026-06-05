@@ -171,6 +171,51 @@ export default function DeviceDashboard({
           </section>
         )}
 
+        {/* Power: Smart-USV (Akku & Last) */}
+        {device.type === "SMART_UPS" && (
+          <section className="mt-6">
+            <SectionTitle>Smart-USV</SectionTitle>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="ambient-blue rounded-xl border border-[#00A3FF]/20 bg-studio-surface p-4">
+                <div className="mb-2 flex items-baseline justify-between">
+                  <span className="text-[11px] uppercase tracking-wider text-studio-muted">
+                    Battery Charge
+                  </span>
+                  <span
+                    className="font-mono text-lg"
+                    style={{ color: (cur.battery_charge ?? 100) < 50 ? "#FF4D6D" : GREEN }}
+                  >
+                    {cur.battery_charge ?? 100} %
+                  </span>
+                </div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-studio-bg">
+                  <div
+                    className="h-full rounded-full transition-[width] duration-500"
+                    style={{
+                      width: `${cur.battery_charge ?? 100}%`,
+                      backgroundColor: (cur.battery_charge ?? 100) < 50 ? "#FF4D6D" : GREEN,
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="ambient-blue rounded-xl border border-[#00A3FF]/20 bg-studio-surface p-4">
+                <div className="mb-2 flex items-baseline justify-between">
+                  <span className="text-[11px] uppercase tracking-wider text-studio-muted">
+                    Last
+                  </span>
+                  <span className="font-mono text-lg text-cyber-cyan">{cur.load_pct ?? 0} %</span>
+                </div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-studio-bg">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-cyber-cyan to-matrix-green transition-[width] duration-500"
+                    style={{ width: `${cur.load_pct ?? 0}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Compute: installierte Dienste (Feature B) */}
         {(device.type === "UBUNTU_SERVER" || device.type === "MAC_STUDIO") && (
           <section className="mt-6">

@@ -1,29 +1,33 @@
-import { useState } from "react";
-import { DashboardIcon, LabIcon, WikiIcon } from "./icons";
+import { LabIcon, AnalyzerIcon, TopologyIcon, GitIcon, DirectoryIcon } from "./icons";
 
-type View = "dashboard" | "lab" | "wiki";
+export type GlobalView = "netdata" | "lab" | "topology" | "directory" | "commits";
 
 interface ActivityItem {
-  id: View;
+  id: GlobalView;
   label: string;
-  Icon: typeof DashboardIcon;
+  Icon: typeof LabIcon;
 }
 
 const ITEMS: ActivityItem[] = [
-  { id: "dashboard", label: "Dashboard", Icon: DashboardIcon },
+  { id: "netdata", label: "Netzwerk-Analysator", Icon: AnalyzerIcon },
   { id: "lab", label: "Lab Builder", Icon: LabIcon },
-  { id: "wiki", label: "Wiki", Icon: WikiIcon },
+  { id: "topology", label: "Network Topology", Icon: TopologyIcon },
+  { id: "directory", label: "Active Directory / LDAP", Icon: DirectoryIcon },
+  { id: "commits", label: "Lab Commits (Git)", Icon: GitIcon },
 ];
 
-/** Schmale, vertikale Icon-Leiste ganz links — der Haupt-Navigator der IDE. */
-export default function ActivityBar() {
-  const [active, setActive] = useState<View>("dashboard");
+interface ActivityBarProps {
+  view: GlobalView;
+  onSelect: (v: GlobalView) => void;
+}
 
+/** Schmale, vertikale Icon-Leiste — schaltet die globalen Ansichten um. */
+export default function ActivityBar({ view, onSelect }: ActivityBarProps) {
   return (
-    <nav className="flex w-14 flex-col items-center border-r border-studio-border bg-studio-surface py-3">
+    <nav className="flex w-14 flex-col items-center border-r border-[#00A3FF]/20 bg-studio-surface py-3">
       <div className="flex flex-col items-center gap-1">
         {ITEMS.map(({ id, label, Icon }) => {
-          const isActive = active === id;
+          const isActive = view === id;
           return (
             <button
               key={id}
@@ -31,14 +35,11 @@ export default function ActivityBar() {
               title={label}
               aria-label={label}
               aria-current={isActive}
-              onClick={() => setActive(id)}
+              onClick={() => onSelect(id)}
               className={`group relative flex h-11 w-11 items-center justify-center rounded-lg transition-colors ${
-                isActive
-                  ? "text-cyber-cyan"
-                  : "text-studio-muted hover:text-studio-text"
+                isActive ? "text-cyber-cyan" : "text-studio-muted hover:text-studio-text"
               }`}
             >
-              {/* aktiver Indikator-Balken links */}
               <span
                 className={`absolute left-0 h-5 w-0.5 rounded-full bg-cyber-cyan transition-all ${
                   isActive ? "opacity-100" : "opacity-0"
@@ -50,7 +51,6 @@ export default function ActivityBar() {
         })}
       </div>
 
-      {/* dezenter Marken-Punkt am unteren Ende */}
       <div className="mt-auto">
         <span className="block h-2 w-2 rounded-full bg-matrix-green text-glow-green shadow-[0_0_10px_#00E599]" />
       </div>

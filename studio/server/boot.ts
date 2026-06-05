@@ -1,5 +1,6 @@
 import { pool } from "./db.ts";
 import { initMetrics, initProcesses, type DeviceType } from "./catalog.ts";
+import { recordCommit } from "./commits.ts";
 
 /** Dauer der simulierten Boot-Phase in Millisekunden (Spec: exakt 5 Sekunden). */
 export const BOOT_DURATION_MS = 5000;
@@ -13,15 +14,17 @@ async function completeBoot(deviceId: string, type: DeviceType): Promise<void> {
   try {
     const metrics = initMetrics(type);
     const processes = initProcesses(type);
-    const res = await pool.query(
+    const res = await pool.query<{ name: string }>(
       `UPDATE devices
          SET status = 'ONLINE',
              details = details || $2::jsonb
-       WHERE id = $1 AND status = 'BOOTING'`,
+       WHERE id = $1 AND status = 'BOOTING'
+       RETURNING name`,
       [deviceId, JSON.stringify({ metrics, processes })],
     );
 
     if (res.rowCount) {
+      const name = res.rows[0]?.name ?? null;
       await pool.query(
         `INSERT INTO device_logs (device_id, title, description, priority, status)
          VALUES ($1, $2, $3, 'P3', 'RESOLVED')`,
@@ -31,6 +34,7 @@ async function completeBoot(deviceId: string, type: DeviceType): Promise<void> {
           "Gerät ist online. Live-Ressourcen-Metriken wurden initialisiert.",
         ],
       );
+      await recordCommit(deviceId, name, `boot: ${name} online (${type})`, "boot");
       console.log(`[boot]: Gerät ${deviceId} → ONLINE`);
     }
   } catch (err) {

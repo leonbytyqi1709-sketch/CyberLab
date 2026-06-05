@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { PGlite } from "@electric-sql/pglite";
 import dotenv from "dotenv";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,15 +9,91 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
-export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }, // Neon.tech
-});
+/* ─────────────────────────────────────────────────────────────────────
+   DB-Backend mit automatischem Fallback:
+   1. Neon (Cloud-PostgreSQL) — wenn erreichbar.
+   2. PGlite (lokales, dateigestütztes PostgreSQL) — wenn Neon blockiert ist
+      (z.B. durch eine Firewall/GPO). Keine Installation, persistent unter
+      studio/.pgdata, netzunabhängig. Mit STUDIO_DB=local erzwingbar.
+   Beide sprechen dieselbe SQL — der restliche Code bleibt unverändert.
+--------------------------------------------------------------------- */
+
+interface QueryResult<T = unknown> {
+  rows: T[];
+  rowCount: number;
+}
+interface Db {
+  query<T = unknown>(text: string, params?: unknown[]): Promise<QueryResult<T>>;
+  exec(sql: string): Promise<void>;
+  backend: "neon" | "pglite";
+}
+
+async function connectNeon(): Promise<Db | null> {
+  if (process.env.STUDIO_DB === "local" || !process.env.DATABASE_URL) return null;
+  const p = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+    connectionTimeoutMillis: 4000,
+  });
+  p.on("error", () => {}); // verhindert unhandled-error-Crashes bei Verlust
+  try {
+    await p.query("SELECT 1");
+    console.log("[db]: Neon (Cloud-PostgreSQL) verbunden.");
+    return {
+      backend: "neon",
+      query: (t, params) =>
+        p.query(t, params as never[]) as unknown as Promise<QueryResult>,
+      exec: async (sql) => {
+        await p.query(sql);
+      },
+    } as Db;
+  } catch (e) {
+    console.warn(
+      `[db]: Neon nicht erreichbar (${(e as Error).message || "Timeout"}) — Fallback auf lokale PGlite.`,
+    );
+    await p.end().catch(() => {});
+    return null;
+  }
+}
+
+async function connectLocal(): Promise<Db> {
+  const dir = path.resolve(__dirname, "../.pgdata");
+  const lite = new PGlite(dir);
+  await lite.waitReady;
+  console.log(`[db]: Lokale PGlite-DB aktiv (${dir}).`);
+  return {
+    backend: "pglite",
+    query: async <T = unknown>(text: string, params?: unknown[]) => {
+      const r = await lite.query<T>(text, params as never[]);
+      return { rows: r.rows, rowCount: r.affectedRows ?? r.rows.length };
+    },
+    exec: async (sql) => {
+      await lite.exec(sql);
+    },
+  };
+}
+
+let dbPromise: Promise<Db> | null = null;
+function getDb(): Promise<Db> {
+  if (!dbPromise) {
+    dbPromise = (async () => (await connectNeon()) ?? (await connectLocal()))();
+  }
+  return dbPromise;
+}
+
+/** Drop-in-Ersatz für das frühere pg-Pool-Objekt: `pool.query(text, params)`. */
+export const pool = {
+  query: async <T = unknown>(
+    text: string,
+    params?: unknown[],
+  ): Promise<QueryResult<T>> => {
+    const d = await getDb();
+    return d.query<T>(text, params);
+  },
+};
 
 /* ── Schema ───────────────────────────────────────────────────────────
-   Hinweis: Log-Tabelle heißt bewusst `device_logs` (nicht `system_logs`),
-   da in derselben Neon-DB bereits eine inkompatible AEGIS-`system_logs`
-   existiert. Felder entsprechen 1:1 der Spezifikation.
+   Log-Tabelle heißt bewusst `device_logs` (nicht `system_logs`).
 --------------------------------------------------------------------- */
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS homelabs (
@@ -55,15 +132,25 @@ CREATE TABLE IF NOT EXISTS device_logs (
     created_at  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- Spalten für bereits existierende device_logs (Schritt 4) nachziehen:
-ALTER TABLE device_logs ADD COLUMN IF NOT EXISTS kind    VARCHAR(30) NOT NULL DEFAULT 'system';
-ALTER TABLE device_logs ADD COLUMN IF NOT EXISTS process VARCHAR(60);
+CREATE TABLE IF NOT EXISTS lab_commits (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hash        VARCHAR(12) NOT NULL,
+    device_id   UUID REFERENCES devices(id) ON DELETE SET NULL,
+    device_name VARCHAR(120),
+    message     VARCHAR(200) NOT NULL,
+    kind        VARCHAR(30) NOT NULL DEFAULT 'change',
+    snapshot    JSONB,
+    created_at  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
 
 CREATE INDEX IF NOT EXISTS idx_devices_homelab   ON devices(homelab_id);
 CREATE INDEX IF NOT EXISTS idx_devicelogs_device ON device_logs(device_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_commits_created   ON lab_commits(created_at DESC);
+
+-- Schritt 8: type-CHECK lockern (neue Hardware-Typen); Validierung erfolgt in der App.
+ALTER TABLE devices DROP CONSTRAINT IF EXISTS devices_type_check;
 `;
 
-/** Stellt sicher, dass genau ein Standard-HomeLab existiert, und gibt dessen id zurück. */
 export async function ensureDefaultHomelab(): Promise<string> {
   const existing = await pool.query<{ id: string }>(
     "SELECT id FROM homelabs ORDER BY created_at ASC LIMIT 1",
@@ -79,8 +166,9 @@ export async function ensureDefaultHomelab(): Promise<string> {
 }
 
 export async function initDb(): Promise<void> {
-  console.log("[db]: initialisiere CyberLab-Schema…");
-  await pool.query(SCHEMA);
+  const d = await getDb();
+  console.log(`[db]: initialisiere CyberLab-Schema (Backend: ${d.backend})…`);
+  await d.exec(SCHEMA);
   await ensureDefaultHomelab();
   console.log("[db]: Schema bereit.");
 }

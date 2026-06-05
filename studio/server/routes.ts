@@ -12,6 +12,7 @@ import {
 } from "./catalog.ts";
 import { armBoot } from "./boot.ts";
 import { explain, type OpenLog } from "./copilot.ts";
+import { recordCommit, revertToCommit } from "./commits.ts";
 
 export const router = Router();
 
@@ -19,7 +20,7 @@ export const router = Router();
 const isValidIpv4 = (s: string): boolean =>
   /^((25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(25[0-5]|2[0-4]\d|1?\d?\d)$/.test(s);
 
-/* ── HomeLabs ───────────────────────────────────────────────────────── */
+/* ── HomeLabs (= Infrastruktur-Tabs) ────────────────────────────────── */
 router.get("/homelabs", async (_req: Request, res: Response) => {
   try {
     const { rows } = await pool.query(
@@ -32,13 +33,74 @@ router.get("/homelabs", async (_req: Request, res: Response) => {
   }
 });
 
-/* ── Geräte: Liste ──────────────────────────────────────────────────── */
-router.get("/devices", async (_req: Request, res: Response) => {
+router.post("/homelabs", async (req: Request, res: Response) => {
   try {
+    const name = String(req.body?.name ?? "").trim() || "Neue Infrastruktur";
+    const { rows } = await pool.query(
+      "INSERT INTO homelabs (name, status) VALUES ($1, 'ACTIVE') RETURNING id, name, status, created_at",
+      [name],
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error("[api]: POST /homelabs", err);
+    res.status(500).json({ error: "Konnte HomeLab nicht anlegen" });
+  }
+});
+
+router.patch("/homelabs/:id", async (req: Request, res: Response) => {
+  try {
+    const name = String(req.body?.name ?? "").trim();
+    if (!name) {
+      res.status(400).json({ error: "Name darf nicht leer sein" });
+      return;
+    }
+    const { rows } = await pool.query(
+      "UPDATE homelabs SET name = $2 WHERE id = $1 RETURNING id, name, status, created_at",
+      [req.params.id, name],
+    );
+    if (!rows[0]) {
+      res.status(404).json({ error: "HomeLab nicht gefunden" });
+      return;
+    }
+    res.json(rows[0]);
+  } catch (err) {
+    console.error("[api]: PATCH /homelabs/:id", err);
+    res.status(500).json({ error: "Konnte HomeLab nicht ändern" });
+  }
+});
+
+router.delete("/homelabs/:id", async (req: Request, res: Response) => {
+  try {
+    // Letztes HomeLab nicht löschen — es muss immer mindestens eins geben.
+    const count = await pool.query<{ n: string }>("SELECT count(*)::int AS n FROM homelabs");
+    if (Number(count.rows[0]?.n ?? 0) <= 1) {
+      res.status(409).json({ error: "Das letzte HomeLab kann nicht gelöscht werden." });
+      return;
+    }
+    const { rowCount } = await pool.query("DELETE FROM homelabs WHERE id = $1", [
+      req.params.id,
+    ]);
+    if (!rowCount) {
+      res.status(404).json({ error: "HomeLab nicht gefunden" });
+      return;
+    }
+    res.json({ ok: true, deleted: req.params.id });
+  } catch (err) {
+    console.error("[api]: DELETE /homelabs/:id", err);
+    res.status(500).json({ error: "Konnte HomeLab nicht löschen" });
+  }
+});
+
+/* ── Geräte: Liste (optional nach ?homelab=<id> gefiltert) ──────────── */
+router.get("/devices", async (req: Request, res: Response) => {
+  try {
+    const homelab = req.query.homelab ? String(req.query.homelab) : null;
     const { rows } = await pool.query(
       `SELECT id, homelab_id, name, type, status, details, created_at
          FROM devices
+        ${homelab ? "WHERE homelab_id = $1" : ""}
         ORDER BY created_at ASC`,
+      homelab ? [homelab] : [],
     );
     res.json(rows);
   } catch (err) {
@@ -73,15 +135,17 @@ router.get("/logs", async (req: Request, res: Response) => {
       parseInt(String(req.query.limit ?? "100"), 10) || 100,
       300,
     );
+    const homelab = req.query.homelab ? String(req.query.homelab) : null;
     const { rows } = await pool.query(
       `SELECT l.id, l.device_id, l.title, l.description, l.priority,
-              l.status, l.created_at,
+              l.status, l.kind, l.created_at,
               d.name AS device_name, d.type AS device_type
          FROM device_logs l
          JOIN devices d ON d.id = l.device_id
+        ${homelab ? "WHERE d.homelab_id = $2" : ""}
         ORDER BY l.created_at DESC
         LIMIT $1`,
-      [limit],
+      homelab ? [limit, homelab] : [limit],
     );
     res.json(rows);
   } catch (err) {
@@ -227,10 +291,13 @@ router.delete("/devices/:id", async (req: Request, res: Response) => {
   }
 });
 
-/* ── Rack leeren: alle Geräte löschen ───────────────────────────────── */
-router.delete("/devices", async (_req: Request, res: Response) => {
+/* ── Rack leeren: alle Geräte (optional nur eines HomeLabs) löschen ──── */
+router.delete("/devices", async (req: Request, res: Response) => {
   try {
-    const { rowCount } = await pool.query("DELETE FROM devices");
+    const homelab = req.query.homelab ? String(req.query.homelab) : null;
+    const { rowCount } = homelab
+      ? await pool.query("DELETE FROM devices WHERE homelab_id = $1", [homelab])
+      : await pool.query("DELETE FROM devices");
     res.json({ ok: true, deleted_count: rowCount ?? 0 });
   } catch (err) {
     console.error("[api]: DELETE /devices", err);
@@ -272,6 +339,7 @@ router.post("/devices/:id/scan", async (req: Request, res: Response) => {
        VALUES ($1, $2, $3, 'P3', 'RESOLVED', 'system')`,
       [dev.id, "Nmap-Scan abgeschlossen", `${ports.length} offene Ports erkannt.`],
     );
+    await recordCommit(dev.id, dev.name, `scan: ${dev.name} aufgedeckt (${ports.length} Ports)`, "scan");
     res.json({ device: rows[0], ports });
   } catch (err) {
     console.error("[api]: POST /scan", err);
@@ -287,6 +355,7 @@ router.post("/devices/:id/apt-upgrade", async (req: Request, res: Response) => {
        WHERE device_id = $1 AND kind = 'security_update' AND status <> 'RESOLVED'`,
       [req.params.id],
     );
+    await recordCommit(req.params.id, null, "apt: Sicherheitsupdates eingespielt", "apt");
     res.json({ ok: true, resolved: rowCount ?? 0 });
   } catch (err) {
     console.error("[api]: POST /apt-upgrade", err);
@@ -307,6 +376,7 @@ router.post("/devices/:id/docker-restart", async (req: Request, res: Response) =
        WHERE device_id = $1 AND kind = 'service' AND process = $2 AND status <> 'RESOLVED'`,
       [req.params.id, container],
     );
+    await recordCommit(req.params.id, null, `docker restart ${container}`, "docker");
     res.json({ ok: true, container, resolved: rowCount ?? 0 });
   } catch (err) {
     console.error("[api]: POST /docker-restart", err);
@@ -347,6 +417,7 @@ router.post("/devices/:id/kill", async (req: Request, res: Response) => {
        WHERE device_id = $1 AND kind = 'process_cpu' AND process = $2`,
       [dev.id, target.name],
     );
+    await recordCommit(dev.id, dev.name, `kill ${target.name} (PID ${target.pid})`, "kill");
     res.json({ ok: true, pid: target.pid, process: target.name, cleared: rowCount ?? 0 });
   } catch (err) {
     console.error("[api]: POST /kill", err);
@@ -400,6 +471,7 @@ router.post("/devices/:id/dns", async (req: Request, res: Response) => {
       dev.id,
       JSON.stringify({ dns_records: next }),
     ]);
+    await recordCommit(dev.id, dev.name, `dns: ${hostname} → ${ip} (pfSense)`, "dns");
     res.status(201).json(next);
   } catch (err) {
     console.error("[api]: POST /dns", err);
@@ -432,7 +504,7 @@ router.get("/dns/resolve", async (req: Request, res: Response) => {
   try {
     const hostname = String(req.query.hostname ?? "").trim().toLowerCase();
     const { rows } = await pool.query<{ recs: DnsRecord[] | null }>(
-      "SELECT details->'dns_records' AS recs FROM devices WHERE type IN ('PFSENSE','MANAGED_SWITCH')",
+      "SELECT details->'dns_records' AS recs FROM devices WHERE type IN ('PFSENSE','MANAGED_SWITCH','CORE_ROUTER')",
     );
     for (const row of rows) {
       const hit = (row.recs ?? []).find((r) => r.hostname === hostname);
@@ -491,6 +563,7 @@ router.post("/devices/:id/install", async (req: Request, res: Response) => {
       dev.id,
       JSON.stringify({ processes: nextProcs, services: nextServices }),
     ]);
+    await recordCommit(dev.id, dev.name, `install: ${service} auf ${dev.name}`, "install");
     res.json({ ok: true, service, process: pkg.process });
   } catch (err) {
     console.error("[api]: POST /install", err);
@@ -518,6 +591,7 @@ router.post("/devices/:id/systemctl", async (req: Request, res: Response) => {
         dev.id,
         JSON.stringify({ processes: next }),
       ]);
+      await recordCommit(dev.id, dev.name, `systemctl stop ${service}`, "systemctl");
       res.json({ ok: true, action, service });
       return;
     }
@@ -529,6 +603,7 @@ router.post("/devices/:id/systemctl", async (req: Request, res: Response) => {
         dev.id,
         JSON.stringify({ processes: next }),
       ]);
+      await recordCommit(dev.id, dev.name, `systemctl start ${service}`, "systemctl");
       res.json({ ok: true, action, service });
       return;
     }
@@ -573,6 +648,7 @@ router.post("/devices/:id/zpool-replace", async (req: Request, res: Response) =>
       dev.id,
       JSON.stringify({ disks: next }),
     ]);
+    await recordCommit(dev.id, dev.name, `zpool replace ${oldId} → ${newId}`, "zfs");
     res.json({ ok: true, old: oldId, new: newId });
   } catch (err) {
     console.error("[api]: POST /zpool-replace", err);
@@ -595,5 +671,42 @@ router.get("/devices/:id/copilot", async (req: Request, res: Response) => {
   } catch (err) {
     console.error("[api]: GET /copilot", err);
     res.status(500).json({ error: "Copilot nicht verfügbar" });
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────────────
+   Schritt 7 — Lab Commits (Git-Style Konfigurations-Historie)
+   ───────────────────────────────────────────────────────────────────── */
+
+router.get("/commits", async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(parseInt(String(req.query.limit ?? "100"), 10) || 100, 300);
+    const homelab = req.query.homelab ? String(req.query.homelab) : null;
+    const { rows } = await pool.query(
+      `SELECT hash, device_id, device_name, message, kind, created_at
+         FROM lab_commits
+        ${homelab ? "WHERE device_id IN (SELECT id FROM devices WHERE homelab_id = $2)" : ""}
+        ORDER BY created_at DESC
+        LIMIT $1`,
+      homelab ? [limit, homelab] : [limit],
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error("[api]: GET /commits", err);
+    res.status(500).json({ error: "Konnte Commits nicht laden" });
+  }
+});
+
+router.post("/commits/:hash/revert", async (req: Request, res: Response) => {
+  try {
+    const result = await revertToCommit(req.params.hash.trim());
+    if (!result.ok) {
+      res.status(result.error?.startsWith("Unbekannter") ? 404 : 400).json(result);
+      return;
+    }
+    res.json(result);
+  } catch (err) {
+    console.error("[api]: POST /commits/:hash/revert", err);
+    res.status(500).json({ error: "Revert fehlgeschlagen" });
   }
 });

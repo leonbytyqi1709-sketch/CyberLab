@@ -42,6 +42,12 @@ function nextMetrics(type: DeviceType, prev: Metrics): Metrics {
     m.unified_mem_used_gb = r1(walk(prev.unified_mem_used_gb ?? 48, 6, 12, total - 8));
     m.gpu_usage = Math.round(walk(prev.gpu_usage ?? 20, 12, 0, 100));
   }
+  if (type === "SMART_UPS") {
+    m.battery_charge = Math.round(walk(prev.battery_charge ?? 100, 0.8, 40, 100));
+    m.load_pct = Math.round(walk(prev.load_pct ?? 35, 5, 5, 95));
+    m.cpu_usage = 0;
+    m.ram_usage = 0;
+  }
   return m;
 }
 
