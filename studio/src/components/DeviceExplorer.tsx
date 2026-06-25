@@ -1,7 +1,8 @@
+import { useState } from "react";
 import type { Device } from "../lib/api";
 import { CATALOG_BY_TYPE, CATEGORIES, type Category } from "../data/catalog";
 import { STATUS_META } from "./statusMeta";
-import { SpinnerIcon, TrashIcon, UnknownIcon } from "./icons";
+import { SpinnerIcon, TrashIcon, UnknownIcon, CheckIcon, XIcon } from "./icons";
 import ConfirmButton from "./ConfirmButton";
 
 interface DeviceExplorerProps {
@@ -9,6 +10,7 @@ interface DeviceExplorerProps {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onClearAll: () => void;
+  onDeleteDevice: (id: string) => void;
 }
 
 /** Sidebar „Geräte-Explorer" — listet die Hardware live aus der DB. */
@@ -17,6 +19,7 @@ export default function DeviceExplorer({
   selectedId,
   onSelect,
   onClearAll,
+  onDeleteDevice,
 }: DeviceExplorerProps) {
   // Geräte nach Katalog-Kategorie gruppieren.
   const byCategory = Object.fromEntries(
@@ -74,6 +77,7 @@ export default function DeviceExplorer({
                       device={dev}
                       active={dev.id === selectedId}
                       onClick={() => onSelect(dev.id)}
+                      onDelete={() => onDeleteDevice(dev.id)}
                     />
                   ))}
                 </ul>
@@ -101,10 +105,12 @@ function DeviceRow({
   device,
   active,
   onClick,
+  onDelete,
 }: {
   device: Device;
   active: boolean;
   onClick: () => void;
+  onDelete: () => void;
 }) {
   const meta = CATALOG_BY_TYPE[device.type];
   const status = STATUS_META[device.status];
@@ -112,13 +118,14 @@ function DeviceRow({
   // Vor dem nmap-Scan generisches "Unknown Device"-Icon statt OS-Icon.
   const unscanned = device.status === "ONLINE" && !device.details?.scanned;
   const Icon = unscanned ? UnknownIcon : meta?.Icon;
+  const [armed, setArmed] = useState(false);
 
   return (
-    <li>
+    <li className="group relative" onMouseLeave={() => setArmed(false)}>
       <button
         type="button"
         onClick={onClick}
-        className={`group relative flex w-full items-center gap-2.5 px-4 py-1.5 text-left text-sm transition-colors ${
+        className={`relative flex w-full items-center gap-2.5 px-4 py-1.5 pr-8 text-left text-sm transition-colors ${
           active
             ? "bg-cyber-cyan/10 text-studio-text"
             : "text-studio-text/90 hover:bg-studio-surface-2"
@@ -151,17 +158,12 @@ function DeviceRow({
           )}
         </span>
 
-        {device.details?.ip && !isBooting && (
-          <span className="hidden font-mono text-[10px] text-studio-muted group-hover:inline">
-            {device.details.ip}
-          </span>
-        )}
-
         {isBooting ? (
           <SpinnerIcon className="shrink-0 animate-spin" style={{ color: status.hex }} />
         ) : (
+          // Status-Punkt — blendet beim Hover aus, damit der Mülleimer Platz hat.
           <span
-            className="h-1.5 w-1.5 shrink-0 rounded-full"
+            className="h-1.5 w-1.5 shrink-0 rounded-full transition-opacity group-hover:opacity-0"
             title={device.status}
             style={{
               backgroundColor: status.hex,
@@ -171,6 +173,54 @@ function DeviceRow({
           />
         )}
       </button>
+
+      {/* Lösch-Affordance rechts (erscheint beim Hovern, mit Bestätigung) */}
+      {!isBooting && (
+        <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center">
+          {armed ? (
+            <span
+              className="flex items-center gap-0.5 rounded-md border px-1 py-0.5"
+              style={{ borderColor: "#FF4D6D55", backgroundColor: "#FF4D6D14" }}
+            >
+              <button
+                type="button"
+                title="Löschen bestätigen"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setArmed(false);
+                  onDelete();
+                }}
+                className="rounded p-0.5 text-[#FF4D6D] transition-colors hover:bg-white/10"
+              >
+                <CheckIcon width={12} height={12} />
+              </button>
+              <button
+                type="button"
+                title="Abbrechen"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setArmed(false);
+                }}
+                className="rounded p-0.5 text-studio-muted transition-colors hover:bg-white/10 hover:text-studio-text"
+              >
+                <XIcon width={12} height={12} />
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              title="Gerät entfernen"
+              onClick={(e) => {
+                e.stopPropagation();
+                setArmed(true);
+              }}
+              className="rounded p-1 text-studio-muted opacity-0 transition-all hover:text-[#FF4D6D] group-hover:opacity-100"
+            >
+              <TrashIcon width={13} height={13} />
+            </button>
+          )}
+        </div>
+      )}
     </li>
   );
 }

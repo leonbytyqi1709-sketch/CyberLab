@@ -89,6 +89,19 @@ export default function Workspace({ homelabId, isActive }: WorkspaceProps) {
     }
   }, [refresh, homelabId]);
 
+  // Einzelnes Gerät direkt aus dem Explorer löschen.
+  const handleDeleteDevice = useCallback(
+    async (id: string) => {
+      try {
+        await api.deleteDevice(id);
+      } finally {
+        setSelectedId((cur) => (cur === id ? null : cur));
+        void refresh();
+      }
+    },
+    [refresh],
+  );
+
   const runTerminalCommand = useCallback((cmd: string) => {
     setTerminalOpen(true);
     setBottomTab("terminal");
@@ -130,6 +143,7 @@ export default function Workspace({ homelabId, isActive }: WorkspaceProps) {
         selectedId={selectedId}
         onSelect={setSelectedId}
         onClearAll={handleClearAll}
+        onDeleteDevice={handleDeleteDevice}
       />
 
       <div className="flex flex-1 flex-col overflow-hidden">
