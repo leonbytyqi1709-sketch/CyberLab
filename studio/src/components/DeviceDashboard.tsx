@@ -83,6 +83,26 @@ export default function DeviceDashboard({
           />
         </div>
 
+        {/* Konfigurierte Hardware (CPU/Kerne/RAM/Speicher) */}
+        {device.details?.specs && (
+          <div className="mb-6">
+            <SectionTitle>Konfiguration</SectionTitle>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Stat label="CPU" value={device.details.specs.cpu || "—"} />
+              <Stat label="Kerne" value={`${device.details.specs.cores}`} />
+              <Stat label="RAM" value={`${device.details.specs.ram_gb} GB`} />
+              <Stat
+                label="Speicher"
+                value={
+                  device.details.specs.storage_gb >= 1000
+                    ? `${Math.round(device.details.specs.storage_gb / 1000)} TB`
+                    : `${device.details.specs.storage_gb} GB`
+                }
+              />
+            </div>
+          </div>
+        )}
+
         {/* Haupt-Charts */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <ChartCard

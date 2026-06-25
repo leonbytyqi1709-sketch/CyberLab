@@ -67,7 +67,7 @@ export default function DeviceView({
 
   const scanned = !!live.details?.scanned;
   const isNetwork = live.type === "PFSENSE" || live.type === "MANAGED_SWITCH";
-  const isStorage = live.type === "TRUENAS" || live.type === "SYNOLOGY";
+  const isStorage = live.type === "TRUENAS" || live.type === "SYNOLOGY" || live.type === "QNAP_NAS";
 
   return (
     <div className="flex h-full flex-col">

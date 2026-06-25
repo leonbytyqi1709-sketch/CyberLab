@@ -17,7 +17,14 @@ export type DeviceType =
   | "SMART_UPS"
   | "WINDOWS_CLIENT"
   | "ADMIN_NOTEBOOK"
-  | "DEV_WORKSTATION";
+  | "DEV_WORKSTATION"
+  // Schritt 10 — weitere Hardware-Optionen
+  | "MACBOOK_PRO"
+  | "MACBOOK_AIR"
+  | "THINKPAD"
+  | "DELL_SERVER"
+  | "HP_PROLIANT"
+  | "QNAP_NAS";
 
 export type DiskState = "ONLINE" | "FAULTY" | "RESILVERING";
 
@@ -132,6 +139,42 @@ export const PROFILES: Record<DeviceType, DeviceProfile> = {
     packages: ["git", "docker-ce", "code", "build-essential"],
     disks: [{ slot: 1, size_gb: 2048, kind: "NVMe" }],
   },
+  MACBOOK_PRO: {
+    os: "macOS 26 Tahoe",
+    chip: "Apple M5 Pro Max",
+    packages: ["Xcode CLT", "Homebrew", "Docker Desktop"],
+    disks: [{ slot: 1, size_gb: 1024, kind: "SSD (Unified)" }],
+  },
+  MACBOOK_AIR: {
+    os: "macOS 26 Tahoe",
+    chip: "Apple M4",
+    packages: ["Safari", "Homebrew"],
+    disks: [{ slot: 1, size_gb: 512, kind: "SSD (Unified)" }],
+  },
+  THINKPAD: {
+    os: "Ubuntu 24.04 LTS",
+    chip: "Intel Core Ultra 7",
+    packages: ["git", "docker-ce", "code", "openssh-client"],
+    disks: [{ slot: 1, size_gb: 1024, kind: "NVMe" }],
+  },
+  DELL_SERVER: {
+    os: "Rocky Linux 9",
+    packages: ["kvm", "libvirt", "cockpit", "podman"],
+    disks: [
+      { slot: 1, size_gb: 512, kind: "NVMe" },
+      { slot: 2, size_gb: 8000, kind: "SAS" },
+    ],
+  },
+  HP_PROLIANT: {
+    os: "VMware ESXi 8",
+    packages: ["vmkernel", "vpxa", "hostd"],
+    disks: [{ slot: 1, size_gb: 480, kind: "SSD" }],
+  },
+  QNAP_NAS: {
+    os: "QTS 5.1",
+    packages: ["smbd", "nfsd", "container-station"],
+    disks: [],
+  },
 };
 
 export const isDeviceType = (t: string): t is DeviceType => t in PROFILES;
@@ -204,6 +247,12 @@ const PROC_NAMES: Record<DeviceType, string[]> = {
   WINDOWS_CLIENT: ["System", "explorer.exe", "svchost.exe", "MsMpEng.exe", "OUTLOOK.exe"],
   ADMIN_NOTEBOOK: ["System", "explorer.exe", "mRemoteNG.exe", "Wireshark.exe", "svchost.exe"],
   DEV_WORKSTATION: ["systemd", "dockerd", "code", "node", "sshd"],
+  MACBOOK_PRO: ["launchd", "WindowServer", "kernel_task", "node", "Docker"],
+  MACBOOK_AIR: ["launchd", "WindowServer", "kernel_task", "Safari"],
+  THINKPAD: ["systemd", "gnome-shell", "dockerd", "code", "sshd"],
+  DELL_SERVER: ["systemd", "libvirtd", "qemu-kvm", "cockpit", "sshd"],
+  HP_PROLIANT: ["vmkernel", "hostd", "vpxa", "vmx"],
+  QNAP_NAS: ["systemd", "smbd", "nfsd", "qpkgd", "sshd"],
 };
 
 /** Container/Services je Gerätetyp (für `docker restart` & Service-Incidents). */
@@ -238,9 +287,16 @@ export function scanPorts(type: DeviceType): { port: number; service: string }[]
       return [{ port: 23, service: "telnet" }, { port: 161, service: "snmp" }, { port: 443, service: "https" }];
     case "TRUENAS":
     case "SYNOLOGY":
+    case "QNAP_NAS":
       return [SSH, { port: 80, service: "http" }, { port: 443, service: "https" }, { port: 445, service: "smb" }];
     case "MAC_STUDIO":
+    case "MACBOOK_PRO":
+    case "MACBOOK_AIR":
       return [SSH, { port: 88, service: "kerberos" }, { port: 5900, service: "vnc Screen Sharing" }];
+    case "DELL_SERVER":
+      return [SSH, { port: 443, service: "https" }, { port: 9090, service: "cockpit" }];
+    case "HP_PROLIANT":
+      return [{ port: 443, service: "https vSphere" }, { port: 902, service: "vmware-auth" }];
     case "PROXMOX_NODE":
       return [SSH, { port: 8006, service: "http Proxmox-VE" }, { port: 3128, service: "spice-proxy" }];
     case "CORE_ROUTER":
@@ -253,6 +309,7 @@ export function scanPorts(type: DeviceType): { port: number; service: string }[]
     case "ADMIN_NOTEBOOK":
       return [{ port: 135, service: "msrpc" }, { port: 139, service: "netbios-ssn" }, { port: 445, service: "microsoft-ds" }, { port: 3389, service: "ms-wbt-server RDP" }];
     case "DEV_WORKSTATION":
+    case "THINKPAD":
       return [SSH, { port: 3000, service: "http dev-server" }, { port: 5173, service: "http vite" }];
     default:
       return [SSH, { port: 80, service: "http nginx" }, { port: 443, service: "https" }];
@@ -260,12 +317,13 @@ export function scanPorts(type: DeviceType): { port: number; service: string }[]
 }
 
 export const isStorage = (t: DeviceType) =>
-  t === "TRUENAS" || t === "SYNOLOGY";
+  t === "TRUENAS" || t === "SYNOLOGY" || t === "QNAP_NAS";
 export const isNetwork = (t: DeviceType) =>
   t === "PFSENSE" || t === "MANAGED_SWITCH" || t === "CORE_ROUTER" || t === "ACCESS_POINT";
 /** Endgeräte/Clients — hängen logisch hinter Switch/Router (für Reachability). */
 export const isClient = (t: DeviceType) =>
-  t === "WINDOWS_CLIENT" || t === "ADMIN_NOTEBOOK" || t === "DEV_WORKSTATION";
+  t === "WINDOWS_CLIENT" || t === "ADMIN_NOTEBOOK" || t === "DEV_WORKSTATION" ||
+  t === "MACBOOK_PRO" || t === "MACBOOK_AIR" || t === "THINKPAD";
 
 export interface Metrics {
   cpu_usage: number;

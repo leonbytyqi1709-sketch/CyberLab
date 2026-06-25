@@ -194,7 +194,23 @@ router.post("/devices", async (req: Request, res: Response) => {
     }
     if (!homelabId) homelabId = await ensureDefaultHomelab();
 
-    const details = { ...buildInitialDetails(type), ...(ip ? { ip } : {}) };
+    // Frei konfigurierbare Hardware-Specs (CPU/Kerne/RAM/Speicher) aus dem Dialog.
+    const s = req.body?.specs;
+    const specs = s
+      ? {
+          cpu: String(s.cpu ?? "").trim().slice(0, 60),
+          cores: Math.max(0, Math.min(512, Number(s.cores) || 0)),
+          ram_gb: Math.max(0, Math.min(8192, Number(s.ram_gb) || 0)),
+          storage_gb: Math.max(0, Math.min(1_000_000, Number(s.storage_gb) || 0)),
+        }
+      : null;
+
+    const base = buildInitialDetails(type);
+    const details = {
+      ...base,
+      ...(ip ? { ip } : {}),
+      ...(specs ? { specs, chip: specs.cpu || base.chip } : {}),
+    };
 
     // Status bewusst explizit auf BOOTING (= DB-Default, hier zur Klarheit).
     const { rows } = await pool.query(

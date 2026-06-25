@@ -30,17 +30,20 @@ interface Db {
 
 async function connectNeon(): Promise<Db | null> {
   if (process.env.STUDIO_DB === "local" || !process.env.DATABASE_URL) return null;
+  const connectionString = process.env.DATABASE_URL;
+  const useSsl = connectionString.includes("sslmode=require") || connectionString.includes("neon.tech");
   const p = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-    connectionTimeoutMillis: 4000,
+    connectionString,
+    ssl: useSsl ? { rejectUnauthorized: false } : false,
+    connectionTimeoutMillis: 15000,
+    max: 2, // Limit pool size to prevent Neon connection limits exhaustion
   });
   p.on("error", () => {}); // verhindert unhandled-error-Crashes bei Verlust
   try {
     await p.query("SELECT 1");
-    console.log("[db]: Neon (Cloud-PostgreSQL) verbunden.");
+    console.log(`[db]: PostgreSQL verbunden (${useSsl ? "SSL" : "kein SSL"}).`);
     return {
-      backend: "neon",
+      backend: "neon", // Wir behalten "neon" als Backend-ID für den restlichen Code bei
       query: (t, params) =>
         p.query(t, params as never[]) as unknown as Promise<QueryResult>,
       exec: async (sql) => {
@@ -49,7 +52,7 @@ async function connectNeon(): Promise<Db | null> {
     } as Db;
   } catch (e) {
     console.warn(
-      `[db]: Neon nicht erreichbar (${(e as Error).message || "Timeout"}) — Fallback auf lokale PGlite.`,
+      `[db]: PostgreSQL nicht erreichbar (${(e as Error).message || "Timeout"}) — Fallback auf lokale PGlite.`,
     );
     await p.end().catch(() => {});
     return null;
@@ -167,6 +170,18 @@ export async function ensureDefaultHomelab(): Promise<string> {
 
 export async function initDb(): Promise<void> {
   const d = await getDb();
+  
+  try {
+    const check = await d.query("SELECT 1 FROM information_schema.tables WHERE table_name = 'devices'");
+    if (check.rowCount > 0) {
+      console.log("[db]: Schema bereits vorhanden. Überspringe DDL-Initialisierung.");
+      await ensureDefaultHomelab();
+      return;
+    }
+  } catch (err) {
+    console.warn("[db]: Fehler beim Prüfen der Tabellen-Existenz, fahre fort:", err);
+  }
+
   console.log(`[db]: initialisiere CyberLab-Schema (Backend: ${d.backend})…`);
   await d.exec(SCHEMA);
   await ensureDefaultHomelab();

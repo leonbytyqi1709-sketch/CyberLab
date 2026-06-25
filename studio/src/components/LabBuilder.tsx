@@ -105,6 +105,11 @@ function ProvisionDialog({
   const inputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
   const [ip, setIp] = useState("");
+  // Hardware-Konfiguration — vorbelegt aus dem Katalog, frei änderbar.
+  const [cpu, setCpu] = useState(item.defaults.cpu);
+  const [cores, setCores] = useState(String(item.defaults.cores));
+  const [ram, setRam] = useState(String(item.defaults.ram_gb));
+  const [storage, setStorage] = useState(String(item.defaults.storage_gb));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -131,6 +136,12 @@ function ProvisionDialog({
         type: item.type as DeviceType,
         homelab_id: homelabId,
         ...(ip.trim() ? { ip: ip.trim() } : {}),
+        specs: {
+          cpu: cpu.trim(),
+          cores: Number(cores) || 0,
+          ram_gb: Number(ram) || 0,
+          storage_gb: Number(storage) || 0,
+        },
       });
       onCreated();
     } catch (e) {
@@ -146,7 +157,7 @@ function ProvisionDialog({
     >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="glow-cyan animate-palette-in relative w-full max-w-md overflow-hidden rounded-xl border border-cyber-cyan/30 bg-studio-surface/95 p-6"
+        className="glow-cyan animate-palette-in relative max-h-[88vh] w-full max-w-md overflow-y-auto rounded-xl border border-cyber-cyan/30 bg-studio-surface/95 p-6"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center gap-3">
@@ -195,6 +206,62 @@ function ProvisionDialog({
           inputMode="decimal"
           className="w-full rounded-lg border border-studio-border bg-studio-bg px-3 py-2.5 font-mono text-sm text-studio-text placeholder:text-studio-muted focus:border-cyber-cyan/60 focus:outline-none focus:ring-1 focus:ring-cyber-cyan/40"
         />
+
+        <label className="mb-1.5 mt-4 block text-xs font-medium uppercase tracking-wider text-studio-muted">
+          CPU
+        </label>
+        <input
+          value={cpu}
+          onChange={(e) => setCpu(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+          placeholder="z.B. Apple M5 Pro Max"
+          disabled={busy}
+          spellCheck={false}
+          autoComplete="off"
+          className="w-full rounded-lg border border-studio-border bg-studio-bg px-3 py-2.5 font-mono text-sm text-studio-text placeholder:text-studio-muted focus:border-cyber-cyan/60 focus:outline-none focus:ring-1 focus:ring-cyber-cyan/40"
+        />
+
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <div>
+            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-studio-muted">
+              Kerne
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={cores}
+              onChange={(e) => setCores(e.target.value)}
+              disabled={busy}
+              className="w-full rounded-lg border border-studio-border bg-studio-bg px-3 py-2.5 font-mono text-sm text-studio-text focus:border-cyber-cyan/60 focus:outline-none focus:ring-1 focus:ring-cyber-cyan/40"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-studio-muted">
+              RAM (GB)
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={ram}
+              onChange={(e) => setRam(e.target.value)}
+              disabled={busy}
+              className="w-full rounded-lg border border-studio-border bg-studio-bg px-3 py-2.5 font-mono text-sm text-studio-text focus:border-cyber-cyan/60 focus:outline-none focus:ring-1 focus:ring-cyber-cyan/40"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-studio-muted">
+              Speicher (GB)
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={storage}
+              onChange={(e) => setStorage(e.target.value)}
+              disabled={busy}
+              className="w-full rounded-lg border border-studio-border bg-studio-bg px-3 py-2.5 font-mono text-sm text-studio-text focus:border-cyber-cyan/60 focus:outline-none focus:ring-1 focus:ring-cyber-cyan/40"
+            />
+          </div>
+        </div>
 
         {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
 

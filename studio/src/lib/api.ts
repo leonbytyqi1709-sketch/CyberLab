@@ -16,9 +16,23 @@ export type DeviceType =
   | "SMART_UPS"
   | "WINDOWS_CLIENT"
   | "ADMIN_NOTEBOOK"
-  | "DEV_WORKSTATION";
+  | "DEV_WORKSTATION"
+  | "MACBOOK_PRO"
+  | "MACBOOK_AIR"
+  | "THINKPAD"
+  | "DELL_SERVER"
+  | "HP_PROLIANT"
+  | "QNAP_NAS";
 
 export type DeviceStatus = "BOOTING" | "ONLINE" | "OFFLINE" | "CRITICAL";
+
+/** Frei konfigurierbare Hardware-Ausstattung eines Geräts. */
+export interface HwSpec {
+  cpu: string;
+  cores: number;
+  ram_gb: number;
+  storage_gb: number;
+}
 
 export interface DeviceMetrics {
   cpu_usage: number;
@@ -84,6 +98,7 @@ export interface DeviceDetails {
   services?: string[];
   zpool?: Zpool;
   dns_records?: DnsRecord[];
+  specs?: HwSpec;
 }
 
 export interface CopilotAnswer {
@@ -167,7 +182,13 @@ export const api = {
   getDevice: (id: string) => http<Device>(`/devices/${id}`),
   listLogs: (homelabId?: string) => http<LogRow[]>(`/logs${hl(homelabId)}`),
   getDeviceLogs: (id: string) => http<DeviceLog[]>(`/devices/${id}/logs`),
-  createDevice: (input: { name: string; type: DeviceType; ip?: string; homelab_id?: string }) =>
+  createDevice: (input: {
+    name: string;
+    type: DeviceType;
+    ip?: string;
+    homelab_id?: string;
+    specs?: HwSpec;
+  }) =>
     http<Device>("/devices", {
       method: "POST",
       body: JSON.stringify(input),
